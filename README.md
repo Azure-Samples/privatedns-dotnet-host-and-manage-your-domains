@@ -5,8 +5,8 @@ languages:
 products:
 - azure
 extensions:
-- services: Private-Dns
-- platforms: dotnet
+  services: Private-Dns
+  platforms: dotnet
 ---
 
 # Getting started on hosting and managing your domains in C# #
