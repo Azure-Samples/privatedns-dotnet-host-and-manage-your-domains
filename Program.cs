@@ -23,7 +23,6 @@ namespace ManagePrivateDns
     public class Program
     {
         private static ResourceIdentifier? _resourceGroupId = null;
-        private const string CustomDomainName = "private.contoso.com";
 
         /**
          * Azure private DNS sample for managing DNS zones.
@@ -64,7 +63,7 @@ namespace ManagePrivateDns
                 }; ;
                 var privateDnsZoneLro = await resourceGroup.GetPrivateDnsZones().CreateOrUpdateAsync(WaitUntil.Completed, zoneName, zoneInput);
                 PrivateDnsZoneResource privateDnsZone = privateDnsZoneLro.Value;
-                Utilities.Log("Created private DNS zone " + privateDnsZone.Data.Name);
+                Utilities.Log("Created private DNS zone: " + privateDnsZone.Data.Name);
 
                 //============================================================
                 // Creates a virtual network
@@ -110,11 +109,11 @@ namespace ManagePrivateDns
                 // Creates test virtual machines
                 Utilities.Log("Creating first virtual machine...");
                 VirtualMachineResource vm1 = await Utilities.CreateVirtualMachine(resourceGroup, nic1.Data.Id, "vm001");
-                Utilities.Log("Created first virtual machine " + vm1.Data.Name);
+                Utilities.Log("Created first virtual machine: " + vm1.Data.Name);
 
                 Utilities.Log("Creating second virtual machine...");
                 VirtualMachineResource vm2 = await Utilities.CreateVirtualMachine(resourceGroup, nic2.Data.Id, "vm002");
-                Utilities.Log("Created second virtual machine " + vm2.Data.Name);
+                Utilities.Log("Created second virtual machine: " + vm2.Data.Name);
 
                 //============================================================
                 // Creates an additional DNS record
@@ -160,9 +159,9 @@ namespace ManagePrivateDns
                 {
                     if (_resourceGroupId is not null)
                     {
-                        Utilities.Log($"Deleting Resource Group: {_resourceGroupId}");
+                        Utilities.Log($"Deleting Resource Group...");
                         await client.GetResourceGroupResource(_resourceGroupId).DeleteAsync(WaitUntil.Completed);
-                        Utilities.Log($"Deleted Resource Group: {_resourceGroupId}");
+                        Utilities.Log($"Deleted Resource Group: {_resourceGroupId.Name}");
                     }
                 }
                 catch (Exception)
@@ -174,18 +173,19 @@ namespace ManagePrivateDns
 
         public static async Task Main(string[] args)
         {
-            var clientId = Environment.GetEnvironmentVariable("CLIENT_ID");
-            var clientSecret = Environment.GetEnvironmentVariable("CLIENT_SECRET");
-            var tenantId = Environment.GetEnvironmentVariable("TENANT_ID");
-            var subscription = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID");
-            ClientSecretCredential credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-            ArmClient client = new ArmClient(credential, subscription);
-
-            await RunSample(client);
             try
             {
                 //=================================================================
                 // Authenticate
+
+                var clientId = Environment.GetEnvironmentVariable("CLIENT_ID");
+                var clientSecret = Environment.GetEnvironmentVariable("CLIENT_SECRET");
+                var tenantId = Environment.GetEnvironmentVariable("TENANT_ID");
+                var subscription = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID");
+                ClientSecretCredential credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+                ArmClient client = new ArmClient(credential, subscription);
+
+                await RunSample(client);
             }
             catch (Exception e)
             {
