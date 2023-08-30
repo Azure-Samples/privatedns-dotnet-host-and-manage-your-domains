@@ -15,6 +15,8 @@ using System.Threading;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.PrivateDns.Models;
 using System.Net;
+using Azure.ResourceManager.Compute.Models;
+using System.Net.WebSockets;
 
 namespace ManagePrivateDns
 {
@@ -108,11 +110,11 @@ namespace ManagePrivateDns
                 //============================================================
                 // Creates test virtual machines
                 Utilities.Log("Creating first virtual machine...");
-                VirtualMachineResource vm1 = await Utilities.CreateVirtualMachine(resourceGroup, nic1.Data.Id);
+                VirtualMachineResource vm1 = await Utilities.CreateVirtualMachine(resourceGroup, nic1.Data.Id, "vm001");
                 Utilities.Log("Created first virtual machine " + vm1.Data.Name);
 
                 Utilities.Log("Creating second virtual machine...");
-                VirtualMachineResource vm2 = await Utilities.CreateVirtualMachine(resourceGroup, nic2.Data.Id);
+                VirtualMachineResource vm2 = await Utilities.CreateVirtualMachine(resourceGroup, nic2.Data.Id, "vm002");
                 Utilities.Log("Created second virtual machine " + vm2.Data.Name);
 
                 //============================================================
@@ -123,7 +125,7 @@ namespace ManagePrivateDns
                 string vm1PubliIPString = vm1PubliIP.Value.Data.IPAddress;
                 Utilities.Log($"vm1 public IP: {vm1PubliIPString}");
 
-                string aRecordName = Utilities.CreateRandomName("aReocrd");
+                string aRecordName = "vm001arecord";
                 PrivateDnsARecordData aRecordInput = new PrivateDnsARecordData()
                 {
                     TtlInSeconds = 3600,
@@ -131,7 +133,7 @@ namespace ManagePrivateDns
                     {
                         new PrivateDnsARecordInfo()
                         {
-                            IPv4Address = IPAddress.Parse(vm1PubliIPString)
+                            IPv4Address = IPAddress.Parse("10.10.2.4")
                         }
                     }
                 };
@@ -142,19 +144,21 @@ namespace ManagePrivateDns
                 //============================================================
                 // Test the private DNS zone
 
-                string script1 = "New-NetFirewallRule -DisplayName \"Allow ICMPv4-In\" -Protocol ICMPv4";
-                Utilities.Log("Preparing first command: " + script1);
-                string script2 = "ping " + vm1.Data.Name + "." + CustomDomainName;
-                Utilities.Log("Preparing second command: " + script2);
-                string script3 = "ping " + rsName + "." + CustomDomainName;
-                Utilities.Log("Preparing third command: " + script1);
-
-                Utilities.Log("Starting to run command...");
-                var result = virtualMachine2.RunPowerShellScript(new List<string> { script1, script2, script3 }, new List<RunCommandInputParameter>());
-                foreach (var info in result.Value)
+                Utilities.Log("Configure VMs to allow inbound ICMP");
+                RunCommandInput initCommandInput = new RunCommandInput("RunPowerShellScript")
                 {
-                    Utilities.Log(info.Message);
-                }
+                    Script = { "New-NetFirewallRule –DisplayName \"Allow ICMPv4-In\" –Protocol ICMPv4" }
+                };
+                _ = await vm1.RunCommandAsync(WaitUntil.Completed, initCommandInput);
+                _ = await vm2.RunCommandAsync(WaitUntil.Completed, initCommandInput);
+
+                Utilities.Log($"VM2 run command: ping vm001arecord.{privateDnsZone.Data.Name}");
+                RunCommandInput pingCommandInput = new RunCommandInput("RunPowerShellScript")
+                {
+                    Script = { $"ping vm001arecord.{privateDnsZone.Data.Name}" }
+                };
+                var result = await vm1.RunCommandAsync(WaitUntil.Completed, pingCommandInput);
+                Utilities.Log(result.Value.Value.First().Message);
             }
             //finally
             //{

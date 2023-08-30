@@ -68,9 +68,9 @@ namespace Azure.ResourceManager.Samples.Common
             return list;
         }
 
-        public static async Task<NetworkInterfaceResource> CreateVirtualNetworkInterface(ResourceGroupResource resourceGroup, ResourceIdentifier subnetId, string pipName = null)
+        public static async Task<NetworkInterfaceResource> CreateVirtualNetworkInterface(ResourceGroupResource resourceGroup, ResourceIdentifier subnetId, string publicIPName = null)
         {
-            string publicIPName = string.IsNullOrEmpty(pipName) ? CreateRandomName("azcrpip") : pipName;
+            publicIPName = publicIPName is null ? CreateRandomName("azcrpip") : publicIPName;
             string nicName = CreateRandomName("nic");
 
             // Create a public ip
@@ -107,15 +107,35 @@ namespace Azure.ResourceManager.Samples.Common
             return networkInterfaceLro.Value;
         }
 
-        public static async Task<VirtualMachineResource> CreateVirtualMachine(ResourceGroupResource resourceGroup, ResourceIdentifier nicId)
+        public static async Task<VirtualMachineResource> CreateVirtualMachine(ResourceGroupResource resourceGroup, ResourceIdentifier nicId, string vmName = null)
         {
-            string vmName = Utilities.CreateRandomName("vm");
+            vmName = vmName is null ? Utilities.CreateRandomName("vm") : vmName;
             VirtualMachineCollection vmCollection = resourceGroup.GetVirtualMachines();
             VirtualMachineData vmInput = new VirtualMachineData(resourceGroup.Data.Location)
             {
                 HardwareProfile = new VirtualMachineHardwareProfile()
                 {
-                    VmSize = VirtualMachineSizeType.StandardF2
+                    VmSize = VirtualMachineSizeType.StandardDS1V2
+                },
+                StorageProfile = new VirtualMachineStorageProfile()
+                {
+                    ImageReference = new ImageReference()
+                    {
+                        Publisher = "MicrosoftWindowsDesktop",
+                        Offer = "Windows-10",
+                        Sku = "win10-21h2-ent",
+                        Version = "latest",
+                    },
+                    OSDisk = new VirtualMachineOSDisk(DiskCreateOptionType.FromImage)
+                    {
+                        OSType = SupportedOperatingSystemType.Windows,
+                        Name = CreateRandomName("myVMOSdisk"),
+                        Caching = CachingType.ReadOnly,
+                        ManagedDisk = new VirtualMachineManagedDisk()
+                        {
+                            StorageAccountType = StorageAccountType.StandardLrs,
+                        },
+                    },
                 },
                 OSProfile = new VirtualMachineOSProfile()
                 {
@@ -134,25 +154,6 @@ namespace Azure.ResourceManager.Samples.Common
                         }
                     }
                 },
-                StorageProfile = new VirtualMachineStorageProfile()
-                {
-                    OSDisk = new VirtualMachineOSDisk(DiskCreateOptionType.FromImage)
-                    {
-                        OSType = SupportedOperatingSystemType.Linux,
-                        Caching = CachingType.ReadWrite,
-                        ManagedDisk = new VirtualMachineManagedDisk()
-                        {
-                            StorageAccountType = StorageAccountType.StandardLrs
-                        }
-                    },
-                    ImageReference = new ImageReference()
-                    {
-                        Publisher = "Canonical",
-                        Offer = "UbuntuServer",
-                        Sku = "16.04-LTS",
-                        Version = "latest",
-                    }
-                }
             };
             var vmLro = await vmCollection.CreateOrUpdateAsync(WaitUntil.Completed, vmName, vmInput);
             return vmLro.Value;
