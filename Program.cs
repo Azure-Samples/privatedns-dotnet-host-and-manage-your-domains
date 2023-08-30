@@ -36,7 +36,7 @@ namespace ManagePrivateDns
          */
         public static async Task RunSample(ArmClient client)
         {
-
+            try
             {
                 // Get default subscription
                 SubscriptionResource subscription = await client.GetDefaultSubscriptionAsync();
@@ -101,10 +101,9 @@ namespace ManagePrivateDns
 
                 //============================================================
                 // To create VMs, pre-create two NICs.
-                string publicIPName1 = Utilities.CreateRandomName("pip");
                 ResourceIdentifier subnetId1 = (await vnet.GetSubnets().GetAsync("subnet1")).Value.Data.Id;
                 ResourceIdentifier subnetId2 = (await vnet.GetSubnets().GetAsync("subnet2")).Value.Data.Id;
-                NetworkInterfaceResource nic1 = await Utilities.CreateVirtualNetworkInterface(resourceGroup, subnetId1, publicIPName1);
+                NetworkInterfaceResource nic1 = await Utilities.CreateVirtualNetworkInterface(resourceGroup, subnetId1);
                 NetworkInterfaceResource nic2 = await Utilities.CreateVirtualNetworkInterface(resourceGroup, subnetId2);
 
                 //============================================================
@@ -120,11 +119,6 @@ namespace ManagePrivateDns
                 //============================================================
                 // Creates an additional DNS record
                 Utilities.Log("Creating additional record set...");
-                Utilities.Log("Get vm1 public IP..");
-                var vm1PubliIP = await resourceGroup.GetPublicIPAddresses().GetAsync(publicIPName1);
-                string vm1PubliIPString = vm1PubliIP.Value.Data.IPAddress;
-                Utilities.Log($"vm1 public IP: {vm1PubliIPString}");
-
                 string aRecordName = "vm001arecord";
                 PrivateDnsARecordData aRecordInput = new PrivateDnsARecordData()
                 {
@@ -133,18 +127,18 @@ namespace ManagePrivateDns
                     {
                         new PrivateDnsARecordInfo()
                         {
-                            IPv4Address = IPAddress.Parse("10.10.2.4")
+                            IPv4Address = IPAddress.Parse(nic1.Data.IPConfigurations.First().PrivateIPAddress)
                         }
                     }
                 };
                 var aRecordLro = await privateDnsZone.GetPrivateDnsARecords().CreateOrUpdateAsync(WaitUntil.Completed, aRecordName, aRecordInput);
                 PrivateDnsARecordResource aRecord = aRecordLro.Value;
-                Utilities.Log("Created additional record set " + aRecord.Data.Name);
+                Utilities.Log("Created additional A Record" + aRecord.Data.Name);
 
                 //============================================================
                 // Test the private DNS zone
 
-                Utilities.Log("Configure VMs to allow inbound ICMP");
+                Utilities.Log("Configure VMs to allow inbound ICMP...");
                 RunCommandInput initCommandInput = new RunCommandInput("RunPowerShellScript")
                 {
                     Script = { "New-NetFirewallRule –DisplayName \"Allow ICMPv4-In\" –Protocol ICMPv4" }
@@ -152,7 +146,7 @@ namespace ManagePrivateDns
                 _ = await vm1.RunCommandAsync(WaitUntil.Completed, initCommandInput);
                 _ = await vm2.RunCommandAsync(WaitUntil.Completed, initCommandInput);
 
-                Utilities.Log($"VM2 run command: ping vm001arecord.{privateDnsZone.Data.Name}");
+                Utilities.Log($"\nVM2 run command: > ping vm001arecord.{privateDnsZone.Data.Name}");
                 RunCommandInput pingCommandInput = new RunCommandInput("RunPowerShellScript")
                 {
                     Script = { $"ping vm001arecord.{privateDnsZone.Data.Name}" }
@@ -160,19 +154,22 @@ namespace ManagePrivateDns
                 var result = await vm1.RunCommandAsync(WaitUntil.Completed, pingCommandInput);
                 Utilities.Log(result.Value.Value.First().Message);
             }
-            //finally
-            //{
-            //    try
-            //    {
-            //        Utilities.Log("Deleting Resource Group: " + rgName);
-            //        azure.ResourceGroups.DeleteByName(rgName);
-            //        Utilities.Log("Deleted Resource Group: " + rgName);
-            //    }
-            //    catch (Exception)
-            //    {
-            //        Utilities.Log("Did not create any resources in Azure. No clean up is necessary");
-            //    }
-            //}
+            finally
+            {
+                try
+                {
+                    if (_resourceGroupId is not null)
+                    {
+                        Utilities.Log($"Deleting Resource Group: {_resourceGroupId}");
+                        await client.GetResourceGroupResource(_resourceGroupId).DeleteAsync(WaitUntil.Completed);
+                        Utilities.Log($"Deleted Resource Group: {_resourceGroupId}");
+                    }
+                }
+                catch (Exception)
+                {
+                    Utilities.Log("Did not create any resources in Azure. No clean up is necessary");
+                }
+            }
         }
 
         public static async Task Main(string[] args)
